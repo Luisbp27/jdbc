@@ -1,0 +1,4 @@
+# id_dog, name_dog, breed, birth, death, sex, color, fur, id_owner, num_vaccines
+38, Yago, Bulldog, 2021-07-11, , M, dark chocolate, Short, 5, 2
+46, Molly, Beagle, 2021-12-08, , F, White, Medium, 17, 0
+47, Emacs, Chihuahua, 2022-01-15, , M, Gray, Long, 25, 1
