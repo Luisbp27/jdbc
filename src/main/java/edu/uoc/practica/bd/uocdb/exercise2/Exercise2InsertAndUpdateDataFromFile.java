@@ -37,31 +37,139 @@ public class Exercise2InsertAndUpdateDataFromFile {
         } catch (FileNotFoundException e) {
             System.err.println("ERROR: File not found");
             e.printStackTrace();
-            return;
         } catch (IOException e) {
             System.err.println("ERROR: I/O error");
             e.printStackTrace();
-            return;
         }
 
         if (fileContents == null) {
             return;
         }
 
-        DBAccessor dbAccessor = new DBAccessor();
-        dbAccessor.init();
+        DBAccessor dbaccessor = new DBAccessor();
+        dbaccessor.init();
+        Connection conn = dbaccessor.getConnection();
 
-        try (Connection conn = dbAccessor.getConnection()) {
-            if (conn == null) {
-                return;
+        if (conn == null) {
+            return;
+        }
+
+        try {
+            // Update or insert the dog and visit from every row in file
+            for (List<String> row : fileContents) {
+                int id_dog = Integer.parseInt(row.get(0));
+
+                // Check if dog exists
+                if (dogExists(conn, id_dog)) {
+                    // Update dog
+                    updateDog(conn, row);
+                } else {
+                    // Insert dog
+                    insertDog(conn, row);
+                }
+
+                // Register the visit
+                insertVisit(conn, row);
             }
-
-            conn.setAutoCommit(false);
-            
-            
+            // Validate transaction
+            conn.commit();
         } catch (SQLException e) {
-            System.err.println("ERROR: Failed to connect to the database");
+            System.err.println("ERROR: SQL error");
             e.printStackTrace();
+
+            // Rollback transaction
+            try {
+                conn.rollback();
+            } catch (SQLException e1) {
+                System.err.println("ERROR: Failed to rollback transaction");
+                e1.printStackTrace();
+            }
+        }
+        // Close resources and check exceptions
+        finally {
+            try {
+                conn.close();
+            } catch (SQLException e) {
+                System.err.println("ERROR: Failed to close connection");
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private boolean dogExists(Connection conn, int idDog) throws SQLException {
+        try (PreparedStatement statment = conn.prepareStatement("SELECT * FROM DOG WHERE id_dog = " + idDog)) {
+            statment.setInt(1, idDog);
+            try (var resultSet = statment.executeQuery()) {
+                resultSet.next();
+                return resultSet.getInt(1) > 0;
+            }
+        }
+    }
+
+    private void updateDog(Connection conn, List<String> row) throws SQLException {
+        final int idDog = Integer.parseInt(row.get(0));
+        final String nameDog = row.get(1);
+        final String breed = row.get(2);
+        final java.sql.Date birth = getDateFromStringOrNull(row.get(3));
+        final java.sql.Date death = getDateFromStringOrNull(row.get(4));
+        final String sex = row.get(5);
+        final String color = row.get(6);
+        final String fur = row.get(7);
+        final int idOwner = Integer.parseInt(row.get(8));
+        final int numVaccines = Integer.parseInt(row.get(9));
+
+        try (PreparedStatement updateStatement = conn.prepareStatement("UPDATE DOG SET " +
+                "id_dog = " + idDog + ", " + "name_dog = " + nameDog + ", " + "breed = " + breed + ", " +
+                "birth = " + birth + ", " + "death = " + death + ", " + "sex = " + sex + ", " + "color = " + color +
+                ", " + "fur = " + fur + ", " + "id_owner = " + idOwner + ", " + "num_vaccines = " + numVaccines
+                + " WHERE id_dog = " + idDog)) {
+
+            setPSUpdateDog(updateStatement, row);
+            updateStatement.executeUpdate();
+        }
+    }
+
+    private void insertDog(Connection conn, List<String> row) throws SQLException {
+        final int idDog = Integer.parseInt(row.get(0));
+        final String nameDog = row.get(1);
+        final String breed = row.get(2);
+        final java.sql.Date birth = getDateFromStringOrNull(row.get(3));
+        final java.sql.Date death = getDateFromStringOrNull(row.get(4));
+        final String sex = row.get(5);
+        final String color = row.get(6);
+        final String fur = row.get(7);
+        final int idOwner = Integer.parseInt(row.get(8));
+        final int numVaccines = Integer.parseInt(row.get(9));
+
+        try (PreparedStatement insertStatment = conn.prepareStatement(
+                "INSERT INTO DOG(id_dog, name_dog, breed, birth, death, sex, color, fur, id_owner, num_vaccines)" +
+                        " VALUES (" + idDog + ", " + nameDog + ", " + breed + ", " + birth + ", " + death + ", "
+                        + sex + ", " + color + ", " + fur + ", " + idOwner + ", " + numVaccines + ")")) {
+            setPSInsertDog(insertStatment, row);
+            insertStatment.executeUpdate();
+        }
+    }
+
+    private void insertVisit(Connection conn, List<String> row) throws SQLException {
+        final int idDog = Integer.parseInt(row.get(0));
+        final java.sql.Date visitDate = getVisitDate(row.get(3));
+        final String reason = "follow-up";
+        final int idVet = 4465;
+        final String comments = "";
+
+        try (PreparedStatement insertStatment = conn.prepareStatement(
+                "INSERT INTO VISIT(id_dog, date, reason, id_veterinary, comments)" +
+                        " VALUES (" + idDog + ", " + visitDate + ", " + reason + ", " + idVet + ", " + comments
+                        + ")")) {
+            setPSInsertVisit(insertStatment, row);
+            insertStatment.executeUpdate();
+
+            try (var generatedKeys = insertStatment.getGeneratedKeys()) {
+                if (generatedKeys.next()) {
+                    int idVisit = generatedKeys.getInt(1);
+                    System.out.println("Inserted visit with id " + idVisit);
+                }
+            }
         }
     }
 
@@ -120,7 +228,7 @@ public class Exercise2InsertAndUpdateDataFromFile {
                 getIntegerFromStringOrNull(getValueIfNotNull(rowArray, 9))); // num_vaccines
     }
 
-    private void setPSInsertVisit(PreparedStatement insertStatement, List<String> row)throws SQLException {
+    private void setPSInsertVisit(PreparedStatement insertStatement, List<String> row) throws SQLException {
         String[] rowArray = (String[]) row.toArray(new String[0]);
 
         setValueOrNull(insertStatement, 1,
