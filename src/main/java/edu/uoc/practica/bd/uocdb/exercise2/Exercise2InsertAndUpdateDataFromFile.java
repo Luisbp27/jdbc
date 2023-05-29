@@ -6,6 +6,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.text.ParseException;
@@ -98,7 +99,7 @@ public class Exercise2InsertAndUpdateDataFromFile {
     private boolean dogExists(Connection conn, int idDog) throws SQLException {
         try (PreparedStatement statment = conn.prepareStatement("SELECT * FROM DOG WHERE id_dog = " + idDog)) {
             statment.setInt(1, idDog);
-            try (var resultSet = statment.executeQuery()) {
+            try (ResultSet resultSet = statment.executeQuery()) {
                 resultSet.next();
                 return resultSet.getInt(1) > 0;
             }
