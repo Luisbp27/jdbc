@@ -25,12 +25,12 @@ public class Exercise1PrintReportOverQuery {
         // With this implementation, the connection is closed automatically
         try (Connection conn = dbAccessor.getConnection()) {
             if (conn != null) {
-                // With this implementation, the statement and the result set are closed
-                // automatically
+                // With this implementation, the statement and the result set are closed automatically
                 try (Statement statement = conn.createStatement();
                         ResultSet resultSet = statement.executeQuery(
                                 "SELECT id_dog, name_dog, num_visits, num_dif_vaccines, date_last_vaccine, num_drugs, num_tests FROM REPORT_DOG ORDER BY num_visits DESC, name_dog ASC")) {
 
+                    // Creating the columns of the report
                     List<Column> columns = Arrays.asList(
                             new Column("Id dog", 7, "id_dog"),
                             new Column("Name dog", 8, "name_dog"),
@@ -40,12 +40,14 @@ public class Exercise1PrintReportOverQuery {
                             new Column("Num drugs", 9, "num_drugs"),
                             new Column("Num tests", 9, "num_tests"));
 
+                    // Creating the report and setting the columns
                     Report report = new Report();
                     report.setColumns(columns);
                     List<Object> list = new ArrayList<>();
 
                     // Taking the data from the query
                     while (resultSet.next()) {
+                        // Adding the data to the list using the Exercise1Row class
                         list.add(new Exercise1Row(
                                 resultSet.getInt("id_dog"),
                                 resultSet.getString("name_dog"),
