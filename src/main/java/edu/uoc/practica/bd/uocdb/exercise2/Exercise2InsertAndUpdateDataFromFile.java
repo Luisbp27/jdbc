@@ -8,6 +8,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Types;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -32,39 +33,35 @@ public class Exercise2InsertAndUpdateDataFromFile {
     private void run() {
         List<List<String>> fileContents = null;
 
+        // Try to read file
         try {
             fileContents = fileUtilities.readFileFromClasspath("exercise2.data");
         } catch (FileNotFoundException e) {
             System.err.println("ERROR: File not found");
             e.printStackTrace();
+            return;
         } catch (IOException e) {
             System.err.println("ERROR: I/O error");
             e.printStackTrace();
-        }
-
-        if (fileContents == null) {
             return;
         }
 
+        // Initialize database connection
         DBAccessor dbaccessor = new DBAccessor();
         dbaccessor.init();
-        Connection conn = dbaccessor.getConnection();
-
-        if (conn == null) {
-            return;
-        }
-
+        Connection conn = null;
         try {
+            conn = dbaccessor.getConnection();
+            conn.setAutoCommit(false);
+
             // Update or insert the dog and visit from every row in file
             for (List<String> row : fileContents) {
-                int id_dog = Integer.parseInt(row.get(0));
+                int idDog = Integer.parseInt(row.get(0));
 
-                // Check if dog exists
-                if (dogExists(conn, id_dog)) {
-                    // Update dog
+                // Check if dog exists and update or insert it
+                if (dogExists(conn, idDog)) {
                     updateDog(conn, row);
                 } else {
-                    // Insert dog
                     insertDog(conn, row);
                 }
 
@@ -77,99 +74,113 @@ public class Exercise2InsertAndUpdateDataFromFile {
             System.err.println("ERROR: SQL error");
             e.printStackTrace();
 
-            // Rollback transaction
+            // Rollback transaction if error like incorrect or missing data
             try {
                 conn.rollback();
             } catch (SQLException e1) {
                 System.err.println("ERROR: Failed to rollback transaction");
                 e1.printStackTrace();
             }
-        }
-        // Close resources and check exceptions
-        finally {
-            try {
-                conn.close();
-            } catch (SQLException e) {
-                System.err.println("ERROR: Failed to close connection");
-                e.printStackTrace();
+        } finally {
+            // Close the connection in the finally block to ensure it gets closed even if an
+            // exception occurs
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (SQLException e) {
+                    System.err.println("ERROR: Failed to close connection");
+                    e.printStackTrace();
+                }
             }
         }
     }
 
+    /**
+     * This method checks if the dog, whith the given id, exists in the database
+     *
+     * @param conn
+     * @param idDog
+     *
+     * @return
+     *
+     * @throws SQLException
+     */
     private boolean dogExists(Connection conn, int idDog) throws SQLException {
-        try (PreparedStatement statment = conn.prepareStatement("SELECT * FROM DOG WHERE id_dog = " + idDog)) {
-            statment.setInt(1, idDog);
-            try (ResultSet resultSet = statment.executeQuery()) {
-                resultSet.next();
-                return resultSet.getInt(1) > 0;
-            }
+        try (PreparedStatement statment = conn.prepareStatement("SELECT * FROM DOG WHERE id_dog = " + idDog);
+                ResultSet resultSet = statment.executeQuery()) {
+            // Check if there is a result and if the id of the dog is the same
+            return resultSet.next() && resultSet.getInt(1) == idDog;
         }
     }
 
+    /**
+     * This method executes the update of the dog in the database using the data
+     * from the file
+     *
+     * @param conn
+     * @param row
+     *
+     * @throws SQLException
+     */
     private void updateDog(Connection conn, List<String> row) throws SQLException {
-        final int idDog = Integer.parseInt(row.get(0));
-        final String nameDog = row.get(1);
-        final String breed = row.get(2);
-        final java.sql.Date birth = getDateFromStringOrNull(row.get(3));
-        final java.sql.Date death = getDateFromStringOrNull(row.get(4));
-        final String sex = row.get(5);
-        final String color = row.get(6);
-        final String fur = row.get(7);
-        final int idOwner = Integer.parseInt(row.get(8));
-        final int numVaccines = Integer.parseInt(row.get(9));
-
-        try (PreparedStatement updateStatement = conn.prepareStatement("UPDATE DOG SET " +
-                "id_dog = " + idDog + ", " + "name_dog = " + nameDog + ", " + "breed = " + breed + ", " +
-                "birth = " + birth + ", " + "death = " + death + ", " + "sex = " + sex + ", " + "color = " + color +
-                ", " + "fur = " + fur + ", " + "id_owner = " + idOwner + ", " + "num_vaccines = " + numVaccines
-                + " WHERE id_dog = " + idDog)) {
+        try (PreparedStatement updateStatement = conn.prepareStatement(
+                "UPDATE DOG SET name_dog = ?, breed = ?, birth = ?, death = ?, sex = ?, color = ?, fur = ?, id_owner = ?, num_vaccines = ? WHERE id_dog = ?")) {
 
             setPSUpdateDog(updateStatement, row);
             updateStatement.executeUpdate();
         }
     }
 
+    /**
+     * This method executes the insert of the dog in the database using the data
+     * from list parameter
+     *
+     * @param updateStatement
+     * @param row
+     *
+     * @throws SQLException
+     */
     private void insertDog(Connection conn, List<String> row) throws SQLException {
-        final int idDog = Integer.parseInt(row.get(0));
-        final String nameDog = row.get(1);
-        final String breed = row.get(2);
-        final java.sql.Date birth = getDateFromStringOrNull(row.get(3));
-        final java.sql.Date death = getDateFromStringOrNull(row.get(4));
-        final String sex = row.get(5);
-        final String color = row.get(6);
-        final String fur = row.get(7);
-        final int idOwner = Integer.parseInt(row.get(8));
-        final int numVaccines = Integer.parseInt(row.get(9));
-
         try (PreparedStatement insertStatment = conn.prepareStatement(
-                "INSERT INTO DOG(id_dog, name_dog, breed, birth, death, sex, color, fur, id_owner, num_vaccines)" +
-                        " VALUES (" + idDog + ", " + nameDog + ", " + breed + ", " + birth + ", " + death + ", "
-                        + sex + ", " + color + ", " + fur + ", " + idOwner + ", " + numVaccines + ")")) {
+                "INSERT INTO DOG(id_dog, name_dog, breed, birth, death, sex, color, fur, id_owner, num_vaccines) VALUES (?,?,?,?,?,?,?,?,?,?)")) {
             setPSInsertDog(insertStatment, row);
             insertStatment.executeUpdate();
         }
     }
 
+    /**
+     * This method executes the insert of the visit in the database using the data
+     * from list parameter
+     *
+     * @param conn
+     * @param row
+     *
+     * @throws SQLException
+     */
     private void insertVisit(Connection conn, List<String> row) throws SQLException {
         final int idDog = Integer.parseInt(row.get(0));
         final java.sql.Date visitDate = getVisitDate(row.get(3));
         final String reason = "follow-up";
         final int idVet = 4465;
-        final String comments = "";
+        final String comments = "First year follow-up";
 
         try (PreparedStatement insertStatment = conn.prepareStatement(
-                "INSERT INTO VISIT(id_dog, date, reason, id_veterinary, comments)" +
-                        " VALUES (" + idDog + ", " + visitDate + ", " + reason + ", " + idVet + ", " + comments
-                        + ")")) {
+                "INSERT INTO VISIT(id_dog, date, reason, id_veterinary, comments) VALUES (?, ?, '" + reason + "', '"
+                        + idVet + "', '" + comments + "')")) {
             setPSInsertVisit(insertStatment, row);
+
             insertStatment.executeUpdate();
 
-            try (var generatedKeys = insertStatment.getGeneratedKeys()) {
-                if (generatedKeys.next()) {
-                    int idVisit = generatedKeys.getInt(1);
-                    System.out.println("Inserted visit with id " + idVisit);
+            // Query to get the id of the visit just inserted
+            try (Statement statement = conn.createStatement();
+                    ResultSet resultSet = statement.executeQuery(
+                            "SELECT id_visit FROM VISIT WHERE id_dog = " + idDog + " AND date = '" + visitDate + "'")) {
+                // Print the id of the visit just inserted
+                while (resultSet.next()) {
+                    System.out.println("Inserted visit with id: " + resultSet.getInt(1));
                 }
             }
+
         }
     }
 
